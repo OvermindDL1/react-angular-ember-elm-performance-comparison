@@ -46,10 +46,10 @@ let init () =
 (* UPDATE *)
 
 (* Users of our app can trigger messages by clicking and typing. These
-   messages are fed into the `update` function as they occur, letting us react
-   to them. *)
+messages are fed into the `update` function as they occur, letting us react
+to them. *)
 type msg =
-  | NoOp
+  (* | NoOp *)
   | UpdateField of string
   | EditingEntry of int * bool
   | UpdateEntry of int * string
@@ -63,7 +63,7 @@ type msg =
 
 (* How we update our Model on a given Msg? *)
 let update model = function
-  | NoOp -> model, Cmd.none
+  (*  NoOp -> model, Cmd.none *)
 
   | Add ->
     { model with
@@ -73,7 +73,7 @@ let update model = function
         if model.field = "" then
           model.entries
         else
-          (newEntry model.field model.uid) :: model.entries
+          newEntry model.field model.uid :: model.entries (* Optimized:  Switched to prepending to a list instead of appending, why the heck would you append only?! *)
     }, Cmd.none
 
   | UpdateField field -> { model with field }, Cmd.none
@@ -115,6 +115,7 @@ let update model = function
     in { model with
          entries = List.map updateEntry model.entries
        }, Cmd.none
+
   | ChangeVisibility visibility ->
     { model with visibility }, Cmd.none
 
@@ -122,16 +123,20 @@ let update model = function
 
 (* View rendering *)
 
-let onEnter msg =
+let onEnter ?(key="") msg =
   let tagger ev = match ev##keyCode with
     | 13 -> Some msg
     | _ -> None
   in
-  on "keydown" tagger
+  on "keydown" ~key:key tagger
 
 
 let viewEntry todo =
-  li
+  let key = string_of_int todo.id in
+  let fullkey = (key ^ string_of_bool todo.completed) in
+  (* Optimized:  Added a key to the node to early-out if exact match, if key is unspecified then the sub section is
+     always recursed into, thus this is *not* like elm's keyed nodes but rather more strict. *)
+  li ~key:fullkey
     [ classList
         [ ("completed", todo.completed)
         ; ("editing", todo.editing)
@@ -143,15 +148,15 @@ let viewEntry todo =
             [ class' "toggle"
             ; type' "checkbox"
             ; checked todo.completed
-            ; onClick (Check (todo.id, not todo.completed))
+            ; onClick ~key:fullkey (Check (todo.id, not todo.completed))
             ]
             []
         ; label
-            [ onDoubleClick (EditingEntry (todo.id, true)) ]
+            [ onDoubleClick ~key:key (EditingEntry (todo.id, true)) ]
             [ text todo.description ]
         ; button
             [ class' "destroy"
-            ; onClick (Delete todo.id)
+            ; onClick ~key:key (Delete todo.id)
             ]
             []
         ]
@@ -160,9 +165,9 @@ let viewEntry todo =
         ; value todo.description
         ; name "title"
         ; id ("todo-" ^ string_of_int todo.id)
-        ; onInput (fun value -> UpdateEntry (todo.id, value))
-        ; onBlur (EditingEntry (todo.id, false))
-        ; onEnter (EditingEntry (todo.id, false))
+        ; onInput ~key:key (fun value -> UpdateEntry (todo.id, value))
+        ; onBlur ~key:key (EditingEntry (todo.id, false))
+        ; onEnter ~key:key (EditingEntry (todo.id, false))
         ]
         []
     ]
@@ -187,18 +192,18 @@ let viewEntries visibility entries =
         ; type' "checkbox"
         ; name "toggle"
         ; checked allCompleted
-        ; onClick (CheckAll (not allCompleted))
+        ; onClick ~key:(string_of_bool allCompleted) (CheckAll (not allCompleted))
         ]
         []
     ; label
         [ for' "toggle-all" ]
         [ text "Mark all as complete" ]
-    ; ul [ class' "todo-list" ] (List.map viewEntry (List.filter isVisible entries))
-    ]
+    ; ul [ class' "todo-list" ] (List.rev_map viewEntry (List.filter isVisible entries))
+]
 
 
 let viewInput task =
-  header
+  header ~key:task
     [ class' "header" ]
     [ h1 [] [ text "todos" ]
     ; input
@@ -215,18 +220,18 @@ let viewInput task =
 
 
 let viewControlsCount entriesLeft =
-  let item_ =
-    if entriesLeft == 1 then " item" else " items" in
-  span
+  let item_ = if entriesLeft == 1 then " item" else " items" in
+  let left = string_of_int entriesLeft in
+  span ~key:left
     [ class' "todo-count" ]
-    [ strong [] [ text (string_of_int entriesLeft) ]
+    [ strong [] [ text left ]
     ; text (item_ ^ " left")
     ]
 
 
 let visibilitySwap uri visibility actualVisibility =
   li
-    [ onClick (ChangeVisibility visibility) ]
+    [ onClick ~key:visibility (ChangeVisibility visibility) ]
     [ a [ href uri; classList [("selected", visibility = actualVisibility)] ]
         [ text visibility ]
     ]
@@ -269,19 +274,20 @@ let viewControls visibility entries =
 
 
 let infoFooter =
-  footer [ class' "info" ]
+  footer ~key:"1"
+    [ class' "info" ]
     [ p [] [ text "Double-click to edit a todo" ]
     ; p []
         [ text "Written by "
         ; a [ href "https://github.com/evancz" ] [ text "Evan Czaplicki" ]
-        ; text " and "
+        ; text " and converted by "
         ; a [ href "https://github.com/overminddl1" ] [ text "OvermindDL1" ]
         ]
     ; p []
-        [ text "Part of "
-        ; a [ href "http://todomvc.com" ] [ text "TodoMVC" ]
-        ]
+    [ text "Part of "
+    ; a [ href "http://todomvc.com" ] [ text "TodoMVC" ]
     ]
+]
 
 
 let view model =
@@ -290,11 +296,11 @@ let view model =
     ; style "visibility" "hidden"
     ]
     [ section
-        [ class' "todoapp" ]
-        [ viewInput model.field
-        ; viewEntries model.visibility model.entries
-        ; viewControls model.visibility model.entries
-        ]
+      [ class' "todoapp" ]
+      [ viewInput model.field
+      ; viewEntries model.visibility model.entries
+      ; viewControls model.visibility model.entries
+      ]
     ; infoFooter
     ]
 
