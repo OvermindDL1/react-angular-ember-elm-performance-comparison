@@ -83,7 +83,7 @@ let update model = function
       if t.id = id then { t with editing } else t
     in { model with
          entries = List.map updateEntry model.entries
-       }, Cmd.none
+       }, if editing then Cmds.focus ("todo-" ^ string_of_int id) else Cmd.none
 
   | UpdateEntry (id, description) ->
     let updateEntry t =
@@ -133,7 +133,7 @@ let onEnter ?(key="") msg =
 
 let viewEntry todo () =
   let key = string_of_int todo.id in
-  let fullkey = (key ^ string_of_bool todo.completed) in
+  let fullkey = (key ^ string_of_bool todo.completed ^ string_of_bool todo.editing) in
   (* Optimized:  Added a key to the node to early-out if exact match, if key is unspecified then the sub section is
      always recursed into, thus this is *not* like elm's keyed nodes but rather more strict. *)
   li ~key:fullkey
@@ -198,7 +198,7 @@ let viewEntries visibility entries =
     ; label
         [ for' "toggle-all" ]
         [ text "Mark all as complete" ]
-    ; ul [ class' "todo-list" ] (List.rev_map (fun todo -> lazy1 (string_of_int todo.id) (viewEntry todo)) (List.filter isVisible entries))
+    ; ul [ class' "todo-list" ] (List.rev_map (fun todo -> lazy1 (string_of_int todo.id ^ string_of_bool todo.completed ^ string_of_bool todo.editing) (viewEntry todo)) (List.filter isVisible entries))
 ]
 
 
@@ -297,6 +297,8 @@ let view model =
     ]
     [ section
       [ class' "todoapp" ]
+      (* [ viewInput model.field () *)
+      (* Optimization: Set the input as a lazy field *)
       [ lazy1 model.field (viewInput model.field)
       ; viewEntries model.visibility model.entries
       ; viewControls model.visibility model.entries
@@ -308,8 +310,9 @@ let view model =
 (* Main Entrance *)
 
 let main =
-  program
+  standardProgram
     { init
     ; update
     ; view
+    ; subscriptions = (fun model -> Sub.none)
     }
